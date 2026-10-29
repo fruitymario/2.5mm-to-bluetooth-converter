@@ -1,3 +1,4 @@
+#include "esp_bt.h"
 #include "AudioTools.h"
 #include "BluetoothA2DPSource.h"
 
@@ -59,6 +60,8 @@ void onConnectionStateChanged(esp_a2d_connection_state_t state, void *obj){
 void setup(){
     Serial.begin(115200);
 
+    esp_bredr_tx_power_set(ESP_PWR_LVL_N0, ESP_PWR_LVL_P9);
+
     I2SConfig config = i_in.defaultConfig(RX_MODE);
     config.pin_bck = PIN_BIT_CLOCK;
     config.pin_ws = PIN_WORD_SELECT;
@@ -73,6 +76,8 @@ void setup(){
     source.set_data_callback(getMixedAudio);
     source.set_on_connection_state_changed(onConnectionStateChanged);
     source.start(EARBUDS_NAME);
+    //Testing max volume to see if it fixes quieter volume issue
+    source.set_volume(127);
 
     Serial.println("Board 2 ready");
 }
