@@ -12,8 +12,11 @@
 #define OUTPUT_SAMPLE_RATE          44100
 
 #define RADIO_SAMPLE_RATE           8000
-#define RADIO_GAIN                  4
+#define RADIO_GAIN                  2
 #define RADIO_RING_BUFFER_SIZE      512
+
+#define THRESHOLD                   8
+#define THRESHOLD_HOLD_SAMPLES      800
 
 I2SStream i_in;
 BluetoothA2DPSource source;
@@ -26,8 +29,10 @@ volatile int radioMin = 4095;
 volatile int radioMax = 0;
 
 void radioSampleTask(void* param){
-    float bias = 2048.0f;
+    float dc = 2048.0f;
     uint32_t nextPeriod = micros() + 1000000UL / OUTPUT_SAMPLE_RATE;
+    float gain = 0.0f;
+    int32_t hold = 0;
 
     while(true){
         int raw = analogRead(RADIO_ADC_PIN);
@@ -35,17 +40,28 @@ void radioSampleTask(void* param){
         if(raw < radioMin) radioMin = raw;
         if(raw > radioMax) radioMax = raw;
 
-        dc += (raw - dc) * .001f;
+        float diff = raw - dc;
+        dc += diff * .001f;
 
-        int32_t sample = (int32_t)((raw - dc) * 16 * RADIO_GAIN);
+        if(fabsf(diff) > THRESHOLD) 
+            hold = THRESHOLD_HOLD_SAMPLES;
+        else if(hold > 0)
+            hold--;
+        
+        float target = (hold > 0) ? 1.0f : 0.0f;
+        gain += target - gain * (target > gain) ? .2f : .01f;
+        
+
+        int32_t sample = (int32_t)(diff * 16 * RADIO_GAIN);
         if(sample > 32767)
             sample = 32767;
         else if (sample < -32768)
             sample = -32768;
 
-        uint32_t nextHead = (ringHead + 1) & (RING_SIZE - 1);
+        uint32_t nextHead = (ringHead + 1) & (RADIO_RING_BUFFER_SIZE - 1);
         if(nextHead != ringTail){
             radioRing[ringHead] = (int16_t)sample;
+            __sync_synchronize();
             ringHead = nextHead;
         }
         
@@ -86,7 +102,7 @@ int32_t getMixedAudio(uint8_t* data, int32_t byteCount){
     static int16_t radioSample = 0;
 
     int16_t* samples = (int16_t*)data;
-    int32_t sampleCount = byteCount / sizeOf(int16_t);
+    int32_t sampleCount = byteCount / sizeof(int16_t);
     
     for(int32_t i = 0; i + 1 < sampleCount; i += 2){
         phase += RADIO_SAMPLE_RATE;
@@ -155,4 +171,8 @@ void setup(){
 void loop() {
     delay(2000);
     Serial.printf("Connection State: %s\n", source.is_connected() ? "Connected" : "Not Connected");
+
+    Serial.printf("min=%d max=%d p-p=%d\n",radioMin, radioMax, radioMax - radioMin);
+    radioMin = 4095;
+    radioMax = 0;
 }
