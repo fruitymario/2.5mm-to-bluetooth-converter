@@ -54,14 +54,69 @@ void radioSampleTask(void* param){
 }
 
 int32_t getMixedAudio(uint8_t* data, int32_t byteCount){
- 
+    // size_t bytesRead = i_in.readBytes(data, byteCount);
+    // if(bytesRead < (size_t)byteCount){
+    //     memset(data + bytesRead, 0, byteCount - bytesRead);
+    // }
+
+    // int raw = analogRead(RADIO_ADC_PIN);
+    // int16_t radioSample = (int16_t)((raw - 2048) * 16);
+
+    // int16_t* samples = (int16_t*)data;
+    // int32_t sampleCount = byteCount / sizeof(int16_t);
+
+    // for(int32_t i = 0; i + 1 < sampleCount; i += 2){
+    //     int32_t left = samples[i];
+    //     int32_t right = samples[i + 1];
+
+    //     if(left > 32767) left = 32767;
+    //     else if(left < -32768) left = -32768;
+    //     if(right > 32767) right = 32767;
+    //     else if(right < -32768) right = -32768;
+
+    //     samples[i] = (int16_t)left;
+    //     samples[i + 1] = (int16_t)right;
+    // }
+    // return byteCount;
+    size_t bytesRead = i_in.readBytes(data, byteCount);
+    if(bytesRead < (size_t)byteCount)
+        memset(data + bytesRead, 0, byteCount - bytesRead);
+    
+    static uint32_t phase = 0;
+    static int16_t radioSample = 0;
+
+    int16_t* samples = (int16_t*)data;
+    int32_t sampleCount = byteCount / sizeOf(int16_t);
+    
+    for(int32_t i = 0; i + 1 < sampleCount; i += 2){
+        phase += RADIO_SAMPLE_RATE;
+        if(phase >= OUTPUT_SAMPLE_RATE){
+            phase -= OUTPUT_SAMPLE_RATE;
+            if(ringTail != ringHead){
+                radioSample = radioRing[ringTail];
+                ringTail = (ringTail + 1) & (RADIO_RING_BUFFER_SIZE - 1);
+            }
+        }
+
+        int32_t left = samples[i] + radioSample;
+        int32_t right = samples[i + 1] + radioSample;
+
+        if(left > 32767) left = 32767;
+        if(left < -32768) left = -32768;
+        if(right > 32767) right = 32767;
+        if(right < -32768) right = -32768;
+
+        samples[i] = (int16_t)left;
+        samples[i + 1] = (int16_t)right;
+    }
+    return byteCount;
 }
 
 void onConnectionStateChanged(esp_a2d_connection_state_t state, void* obj){
     switch(state){
         case ESP_A2D_CONNECTION_STATE_CONNECTED:
             Serial.println("Connected to earbuds");
-            source.set_volume(127);
+            //source.set_volume(127);
             break;
         case ESP_A2D_CONNECTION_STATE_CONNECTING:
             Serial.println("Connecting to earbuds...");
