@@ -14,6 +14,7 @@
 #define RADIO_SAMPLE_RATE           8000
 #define RADIO_GAIN                  2
 #define RADIO_RING_BUFFER_SIZE      512
+#define PERIOD                      (1000000UL / RADIO_SAMPLE_RATE)
 
 #define THRESHOLD                   8
 #define THRESHOLD_HOLD_SAMPLES      800
@@ -30,7 +31,7 @@ volatile int radioMax = 0;
 
 void radioSampleTask(void* param){
     float dc = 2048.0f;
-    uint32_t nextPeriod = micros() + 1000000UL / OUTPUT_SAMPLE_RATE;
+    uint32_t nextPeriod = micros() + PERIOD;
     float gain = 0.0f;
     int32_t hold = 0;
 
@@ -49,10 +50,10 @@ void radioSampleTask(void* param){
             hold--;
         
         float target = (hold > 0) ? 1.0f : 0.0f;
-        gain += target - gain * (target > gain) ? .2f : .01f;
+        gain += (target - gain) * ((target > gain) ? .2f : .01f);
         
 
-        int32_t sample = (int32_t)(diff * 16 * RADIO_GAIN);
+        int32_t sample = (int32_t)(diff * gain * 16 * RADIO_GAIN);
         if(sample > 32767)
             sample = 32767;
         else if (sample < -32768)
@@ -65,6 +66,7 @@ void radioSampleTask(void* param){
             ringHead = nextHead;
         }
         
+        nextPeriod += PERIOD;
         while((int32_t)(micros() - nextPeriod) < 0) {}
     }
 }
@@ -94,6 +96,8 @@ int32_t getMixedAudio(uint8_t* data, int32_t byteCount){
     //     samples[i + 1] = (int16_t)right;
     // }
     // return byteCount;
+    if(data == NULL || byteCount < 0) return 0;
+
     size_t bytesRead = i_in.readBytes(data, byteCount);
     if(bytesRead < (size_t)byteCount)
         memset(data + bytesRead, 0, byteCount - bytesRead);
