@@ -165,7 +165,7 @@ void setup(){
 
     source.set_data_callback(getMixedAudio);
     source.set_on_connection_state_changed(onConnectionStateChanged);
-    source.start(EARBUDS_NAME);
+    //source.start(EARBUDS_NAME);
 
     xTaskCreatePinnedToCore(radioSampleTask, "Sampler", 4096, NULL, 1, NULL, 1);
 
