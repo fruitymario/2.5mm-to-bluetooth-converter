@@ -15,8 +15,9 @@
 #define RADIO_GAIN                  2
 #define RADIO_RING_BUFFER_SIZE      512
 #define PERIOD                      (1000000UL / RADIO_SAMPLE_RATE)
+#define ANALOG_SAMPLES_SIZE         5
 
-#define THRESHOLD                   20
+#define THRESHOLD                   40
 #define THRESHOLD_HOLD_SAMPLES      800
 
 I2SStream i_in;
@@ -29,6 +30,27 @@ volatile uint32_t ringTail = 0;
 volatile int radioMin = 4095;
 volatile int radioMax = 0;
 
+static inline int median(){
+    static int samples[ANALOG_SAMPLES_SIZE];
+
+    for(int i = 0; i < ANALOG_SAMPLES_SIZE; i++){
+        samples[i] = analogRead(RADIO_ADC_PIN);
+    }
+
+    for(int i = 1; i < ANALOG_SAMPLES_SIZE; i++){
+        int key = samples[i];
+        int j = i - 1;
+
+        while(j >= 0 && samples[j] > key){
+            samples[j + 1] = samples[j];
+            j--;
+        }
+        samples[j + 1] = key;
+    }
+
+    return samples[ANALOG_SAMPLES_SIZE / 2];
+}
+
 void radioSampleTask(void* param){
     float dc = 2048.0f;
     uint32_t nextPeriod = micros() + PERIOD;
@@ -36,22 +58,7 @@ void radioSampleTask(void* param){
     int32_t hold = 0;
 
     while(true){
-        int raw;
-
-        int rawA = analogRead(RADIO_ADC_PIN);
-        int rawB = analogRead(RADIO_ADC_PIN);
-        int rawC = analogRead(RADIO_ADC_PIN);
-
-        if(rawA > rawB){
-            raw = rawA;
-            rawA = rawB;
-            rawB = raw;
-        }
-        if(rawB > rawC){
-            rawB = rawC;
-        }
-
-        raw = (rawA > rawB) ? rawA : rawB;
+        int raw = median();
 
         if(raw < radioMin) radioMin = raw;
         if(raw > radioMax) radioMax = raw;
