@@ -16,7 +16,7 @@
 #define RADIO_RING_BUFFER_SIZE      512
 #define PERIOD                      (1000000UL / RADIO_SAMPLE_RATE)
 
-#define THRESHOLD                   8
+#define THRESHOLD                   20
 #define THRESHOLD_HOLD_SAMPLES      800
 
 I2SStream i_in;
@@ -36,7 +36,22 @@ void radioSampleTask(void* param){
     int32_t hold = 0;
 
     while(true){
-        int raw = analogRead(RADIO_ADC_PIN);
+        int raw;
+
+        int rawA = analogRead(RADIO_ADC_PIN);
+        int rawB = analogRead(RADIO_ADC_PIN);
+        int rawC = analogRead(RADIO_ADC_PIN);
+
+        if(rawA > rawB){
+            raw = rawA;
+            rawA = rawB;
+            rawB = raw;
+        }
+        if(rawB > rawC){
+            rawB = rawC;
+        }
+
+        raw = (rawA > rawB) ? rawA : rawB;
 
         if(raw < radioMin) radioMin = raw;
         if(raw > radioMax) radioMax = raw;
@@ -165,7 +180,7 @@ void setup(){
 
     source.set_data_callback(getMixedAudio);
     source.set_on_connection_state_changed(onConnectionStateChanged);
-    //source.start(EARBUDS_NAME);
+    source.start(EARBUDS_NAME);
 
     xTaskCreatePinnedToCore(radioSampleTask, "Sampler", 4096, NULL, 1, NULL, 1);
 
